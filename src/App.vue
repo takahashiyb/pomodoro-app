@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
+// # # # # # Timer Data # # # # # # //
+
 interface Timer {
   name: string
   duration: number
@@ -73,11 +75,28 @@ function convertToSeconds(minutes: number) {
   return minutes * 60
 }
 
-const openDialog = ref<boolean>(false)
+function setDuration(minutes: number, timer: Timer) {
+  const time = convertToSeconds(minutes)
 
-const font = ref<string>('font-3')
+  timer.duration = time
+  timer.remaining = time
+}
 
-const color = ref<string>('red')
+// # # # # # Styles # # # # # # //
+
+const fontList = [
+  { name: 'Kumbh Sans', id: 'font-1', short: 'k' },
+  { name: 'Roboto Slab', id: 'font-2', short: 'r' },
+  { name: 'Space Mono', id: 'font-3', short: 's' },
+]
+
+const colorList = [{ name: 'red' }, { name: 'cyan' }, { name: 'purple' }]
+
+const setFont = ref<string>('font-3')
+
+const setColor = ref<string>('red')
+
+// # # # # # Timer # # # # # # //
 
 const isTicking = ref<boolean>(false)
 
@@ -113,7 +132,7 @@ function runDuration() {
   watch(
     () => current.value.remaining,
     (newVal) => {
-      if (newVal === 0) {
+      if (newVal <= 0) {
         resetDuration()
       }
     },
@@ -121,8 +140,6 @@ function runDuration() {
 }
 
 function pauseDuration() {
-  console.log(isTicking)
-  console.log(startTime)
   if (!isTicking || !startTime) return
 
   isTicking.value = false
@@ -131,14 +148,110 @@ function pauseDuration() {
 
   clearInterval(interval)
 }
+
+// # # # # # Dialog / Settings # # # # # # //
+
+const isDialogOpen = ref<boolean>(false)
+
+function openDialog() {
+  pauseDuration()
+
+  isDialogOpen.value = true
+}
+
+function applyChanges(e: Event) {
+  const form = e.target as HTMLFormElement
+  const newTimers = [
+    { pomodoro: (form.elements.namedItem('pomodoro') as HTMLInputElement).value },
+    { 'short break': (form.elements.namedItem('short break') as HTMLInputElement).value },
+    { 'long break': (form.elements.namedItem('long break') as HTMLInputElement).value },
+  ]
+  for (let i = 0; i < newTimers.length; i++) {
+    const timer = timers.find((j) => j.name === Object.keys(newTimers[i]!)[0])
+    setDuration(Object.values(newTimers[i]!)[0], timer!)
+  }
+
+  const font = (form.elements.namedItem('font') as HTMLInputElement).value
+  setFont.value = font
+
+  const color = (form.elements.namedItem('color') as HTMLInputElement).value
+  setColor.value = color
+
+  isDialogOpen.value = false
+}
 </script>
 
 <template>
-  <dialog :open="openDialog"></dialog>
-  <header>
+  <dialog :open="isDialogOpen">
+    <form @submit.prevent="applyChanges">
+      <header>
+        <span class="text__settings--h">Settings</span>
+        <img
+          src="@/assets/icons/icon-close.svg"
+          alt="close settings display"
+          @click="isDialogOpen = false"
+        />
+      </header>
+      <br />
+      <section class="container__settings container__settings--time">
+        <span class="text__settings--h2">TIME (MINUTES)</span>
+        <div>
+          <label class="text__settings--h3" v-for="timer in timers">
+            <span>{{ timer.name }}</span>
+            <input type="number" :value="Number(timer.minutes())" :name="timer.name" />
+          </label>
+        </div>
+      </section>
+      <br />
+      <section class="container__settings container__settings--style">
+        <span class="text__settings--h2">FONT</span>
+        <div>
+          <label
+            :class="[
+              'settings__option',
+              `settings__option--font`,
+              `settings__option--${font.short}`,
+            ]"
+            v-for="font in fontList"
+          >
+            <input type="radio" name="font" :checked="font.id === setFont" :value="font.id" />
+            <span class="sr-only">click to select the font: {{ font.name }}</span>
+            <span aria-hidden="true">Aa</span>
+          </label>
+        </div>
+      </section>
+      <br />
+      <section class="container__settings container__settings--style">
+        <span class="text__settings--h2">COLOR</span>
+        <div>
+          <label
+            :class="[
+              'settings__option',
+              'settings__option--color',
+              `settings__option--${color.name}`,
+            ]"
+            v-for="color in colorList"
+          >
+            <input
+              type="radio"
+              name="color"
+              :checked="color.name === setColor"
+              :value="color.name"
+            />
+            <span class="sr-only">click to select the color: {{ color.name }}</span>
+            <img src="./assets/icons/icon-checkmark.svg" alt="checkmark icon" />
+          </label>
+        </div>
+      </section>
+      <div class="button__settings" type="submit" @submit.prevent="applyChanges">
+        <button type="submit">Apply</button>
+      </div>
+    </form>
+  </dialog>
+  <header class="header__main">
     <img src="./assets/icons/logo.svg" alt="" />
   </header>
-  <main class="purple" :class="[font, color]">
+  <main :class="[setFont, setColor]">
     <ul class="container__type">
       <li
         class="type"
@@ -169,7 +282,7 @@ function pauseDuration() {
         <span class="text__command" @click="runDuration" v-if="!isTicking">RESTART</span>
       </div>
     </section>
-    <section class="container__settings" @click="openDialog = true">
+    <section class="container__settings" @click="openDialog">
       <img src="./assets/icons/icon-settings.svg" alt="" />
     </section>
   </main>
@@ -189,6 +302,10 @@ html {
 <style scoped lang="scss">
 @use '@/assets/styles/main.scss' as v;
 @use '@/assets/styles/functions.scss' as f;
+
+.header__main {
+  padding-bottom: 20%;
+}
 
 header,
 .container__settings {
@@ -216,6 +333,8 @@ main {
   padding: v.$spacing-0100;
 
   border-radius: 9em;
+
+  z-index: 1;
 }
 
 .type {
@@ -371,5 +490,182 @@ main.font-3 .text__command {
   font-family: v.$font-3;
 
   @include f.responsive-type(v.$font-3-text-2m, v.$font-3-text-2, v.$font-3-text-2);
+}
+
+dialog {
+  border: 0;
+  border-radius: 15px;
+
+  padding-bottom: 0;
+
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+
+  z-index: 99;
+}
+
+form header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+form header img {
+  cursor: pointer;
+}
+
+.text__settings--h {
+  color: rgba(v.$blue-900, 100%);
+
+  font-family: v.$font-1;
+
+  @include f.flat-type(v.$settings-text-1);
+}
+
+.text__settings--h2 {
+  color: rgba(v.$blue-900, 100%);
+
+  font-family: v.$font-1;
+
+  @include f.flat-type(v.$settings-text-3);
+}
+
+.container__settings--time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: v.$spacing-0200;
+}
+
+.container__settings--style {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: v.$spacing-0200;
+}
+
+.container__settings--style div {
+  height: 40px;
+  width: min-content;
+
+  display: flex;
+  justify-content: space-between;
+  gap: v.$spacing-0200;
+}
+
+.text__settings--h3 {
+  font-family: v.$font-1;
+
+  color: rgba(v.$blue-850, 100%);
+
+  @include f.flat-type(v.$settings-text-4);
+}
+
+.container__settings--time div {
+  display: flex;
+  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
+  gap: v.$spacing-0200;
+}
+
+.container__settings--time div label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: v.$spacing-0200;
+}
+
+.container__settings--time div label input {
+  background-color: rgba(v.$blue-050, 100%);
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+}
+
+.settings__option {
+  aspect-ratio: 1;
+  background-color: v.$blue-050;
+  color: v.$blue-850;
+  cursor: pointer;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+}
+
+input[type='radio'] {
+  display: none;
+}
+
+.settings__option--font:has(input:checked) {
+  background-color: v.$blue-900;
+  color: v.$white;
+}
+
+.settings__option--k {
+  font-family: v.$font-1;
+
+  @include f.flat-type(v.$settings-text-2-k);
+}
+
+.settings__option--r {
+  font-family: v.$font-2;
+
+  @include f.flat-type(v.$settings-text-2-r);
+}
+
+.settings__option--s {
+  font-family: v.$font-3;
+
+  @include f.flat-type(v.$settings-text-2-s);
+}
+
+.settings__option--color img {
+  opacity: 0;
+}
+
+.settings__option--color:has(input:checked) img {
+  opacity: 100;
+}
+
+.settings__option--red {
+  background-color: rgba(v.$red-400, 100%);
+}
+
+.settings__option--cyan {
+  background-color: rgba(v.$cyan-300, 100%);
+}
+
+.settings__option--purple {
+  background-color: rgba(v.$purple-400, 100%);
+}
+
+.button__settings {
+  display: flex;
+  justify-content: center;
+
+  translate: 0 50%;
+}
+
+.button__settings button {
+  background-color: rgba(v.$red-400, 100%);
+  width: min-content;
+  color: rgba(v.$white, 100%);
+  cursor: pointer;
+
+  font-family: v.$font-1;
+
+  @include f.flat-type(v.$settings-text-3);
+
+  border-radius: 9em;
+  border: none;
+  outline: none;
+
+  padding: v.$spacing-0200;
+  padding-inline: v.$spacing-0600;
 }
 </style>
